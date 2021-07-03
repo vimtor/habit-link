@@ -1,0 +1,109 @@
+//SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.0;
+
+// TODO: Maybe adding the ability to add to which user should the money go back so people can work towards something
+// TODO: Maybe adding the ability to have several contribute towards a goal
+// TODO: Maybe take gas into account so users don't lose anything but then a fee to cover the gas or a minimum goal length should be added
+// TODO: Add the possibility to have negative goals (smoke less)
+// TODO: Add the possibility to have boolean goals
+// TODO: For integrations create an interface for others to implement (contract GoogleFit is HabitSource)
+// TODO: Maybe adding a fee is a good idea
+// TODO: Check how to invest the contract money to generate interests for the users
+contract HabitTracker {
+    // TODO: Do something with the frequency
+    enum Frequency {DAILY, WEEKLY, MONTHLY, YEARLY}
+
+    // TODO: Probably rename to Habit
+    struct Goal {
+        uint256 goal;
+        uint256 progress;
+        uint256 stake;
+        uint256 deadline;
+        string unit;
+        // TODO: Add habit name
+        // string name;
+    }
+
+    // TODO: Investigate why events are useful and what are their gas implications
+    event GoalCompleted(address indexed _from, string indexed _name);
+    event GoalCancelled(address indexed _from, string indexed _name);
+    event GoalFailed(address indexed _from, string indexed _name);
+    event GoalStarted(address indexed _from, string indexed _name);
+
+    // TODO: Add the ability to have more than 1 goal per address
+    mapping(address => Goal) goals;
+
+    function createGoal(uint256 goal, uint256 deadline, string memory unit) payable public {
+        // TODO: Check that goal is not being overridden
+        require(deadline > block.timestamp, "A past goal cannot be created");
+        goals[msg.sender] = Goal(goal, 0, msg.value, deadline, unit);
+    }
+
+    // TODO: Function to motivate a user further
+    // Consider blocking the method of verification so the original user doesn't get the money and run
+    function increaseStake(address to) hasGoals(to) payable public {
+        goals[to].stake += msg.value;
+    }
+
+    // TODO: Add the option to progress other user habit? In edge cases (money being lost or person died)
+    function addProgress(address to, uint256 value) hasGoals(to) onlyOwner(to) public {
+        goals[to].progress += value;
+        // TODO: Check if habit has been completed
+    }
+
+    // TODO: Add notion of privacy?
+    function getProgress() view public returns (uint256) {
+        return goals[msg.sender].progress;
+    }
+
+    function completeGoal(address payable to) hasGoals(to) onlyOwner(to) public {
+        Goal memory goal = goals[to];
+        // TODO: Move to a modifier
+        require(goal.progress >= goal.goal);
+        to.transfer(goal.stake);
+    }
+
+    function failGoal(address payable to) hasGoals(to) onlyOwner(to) public {
+        Goal memory goal = goals[to];
+        // TODO: Move to a modifier
+        require(goal.progress < goal.goal && goal.deadline < block.timestamp);
+        // TODO: Probably makes more sense to have the goal as an state machine (FAILED)
+        // TODO: Either way maybe removing it is a good idea for memory concerns
+        delete goals[to];
+        // TODO: Do something with the remaining funds
+    }
+
+    // TODO: Add the notion of an non-cancellable goal
+    function cancelGoal(address payable to) hasGoals(to) public {
+        Goal memory goal = goals[to];
+        to.transfer(goal.stake);
+        // TODO: Probably makes more sense to have the goal as an state machine (CANCELLED)
+        delete goals[to];
+    }
+
+    // Probably this function will be called by a cron job or a generous user
+    function checkGoals(address payable to) hasGoals(to) public {
+        Goal memory goal = goals[to];
+
+        // TODO: Investigate and add an error factor margin
+        bool isGoalFinished = block.timestamp > goal.deadline;
+        bool isGoalSucceeded = goal.progress >= goal.stake;
+
+        if (isGoalSucceeded) {
+            completeGoal(to);
+        } else if (isGoalFinished) {
+            failGoal(to);
+        }
+    }
+
+    modifier onlyOwner(address owner) {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+
+    modifier hasGoals(address owner) {
+        // TODO: Actually implement
+        require(true, "User doest not have any goals");
+        _;
+    }
+}
