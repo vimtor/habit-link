@@ -12,7 +12,6 @@ contract HabitSource {
     }
 
     function addProgress(address to, uint256 progress) public {
-        tracker.addProgress(to, progress);
     }
 
     // All sources (FitBit, Trello, GitHub...) are related to an activity
