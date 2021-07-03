@@ -18,14 +18,14 @@ describe("HabitTracker", () => {
 
     describe("create goal", () => {
         it("initializes progress to 0 by default", async () => {
-            await tracker.createGoal(10, Date.now() + 10000, 'miles')
-            const progress = await tracker.getProgress();
+            await tracker.createGoal('run 10 miles', 10, Date.now() + 10000, 'miles')
+            const progress = await tracker.getProgress(owner.address);
             expect(progress).to.equal(0);
         });
 
         it("throws if the deadline has passed", async () => {
             try {
-                await tracker.createGoal(10, 0, 'miles')
+                await tracker.createGoal('run 10 miles', 10, 0, 'miles')
                 assert.fail(0, 1, 'Exception not thrown');
             } catch (error) {
                 expect(error.message).to.contain("past goal cannot be created")
@@ -35,14 +35,14 @@ describe("HabitTracker", () => {
 
     describe("update progress", () => {
         it('updates the progress by the specified amount', async () => {
-            await tracker.createGoal(10, Date.now() + 10000, 'miles')
-            expect(await tracker.getProgress()).to.equal(0);
+            await tracker.createGoal('run 10 miles', 10, Date.now() + 10000, 'miles')
+            expect(await tracker.getProgress(owner.address)).to.equal(0);
 
             await tracker.addProgress(owner.address, 1);
-            expect(await tracker.getProgress()).to.equal(1);
+            expect(await tracker.getProgress(owner.address)).to.equal(1);
 
             await tracker.addProgress(owner.address, 2);
-            expect(await tracker.getProgress()).to.equal(3);
+            expect(await tracker.getProgress(owner.address)).to.equal(3);
         });
 
         it('throws if no goal exists for that user', async () => {
