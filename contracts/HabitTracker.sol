@@ -1,7 +1,6 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
-// TODO: Maybe adding the ability to add to which user should the money go back so people can work towards something
 // TODO: Maybe adding the ability to have several contribute towards a goal
 // TODO: Add the possibility to have negative goals (smoke less)
 // TODO: Add the possibility to have boolean goals. This makes sense if frequency feature is implemented
@@ -69,8 +68,6 @@ contract HabitTracker {
     }
 
     function failGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) onlyFailedGoal(_user, _name) {
-        Goal memory goal = goals[_user][_name];
-        require(goal.progress < goal.target && goal.deadline < block.timestamp);
         goals[_user][_name].status = Status.FAILED;
         // TODO: Do something with the remaining funds
     }
@@ -98,7 +95,6 @@ contract HabitTracker {
         return block.timestamp > goals[_user][_name].deadline;
     }
 
-    // TODO: Should this include the onlyUser modifier?
     function isGoalCompleted(address _user, string memory _name) internal view returns (bool) {
         return goals[_user][_name].progress >= goals[_user][_name].target;
     }
