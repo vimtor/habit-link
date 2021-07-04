@@ -77,7 +77,7 @@ contract HabitTracker {
     function completeGoal(address payable _user, string memory _name) public goalExists(_user, _name) onlyOwner(_user) {
         uint256 _index = findGoalIndex(_user, _name);
         Goal memory goal = goals[_user][_index];
-        require(goal.progress >= goal.target);
+        require(goal.progress >= goal.target, "The goal has not been reached yet");
         _user.transfer(goal.stake);
         goals[_user][_index].status = Status.COMPLETED;
     }
