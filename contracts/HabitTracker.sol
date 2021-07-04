@@ -12,6 +12,8 @@ contract HabitTracker {
     // TODO: Do something with the frequency
     // enum Frequency {NONE,DAILY, WEEKLY, MONTHLY, YEARLY}
 
+    enum Status {ONGOING, COMPLETED, CANCELLED, FAILED}
+
     // TODO: Investigate why events are useful and what are their gas implications
     // event GoalCompleted(address indexed _from, string indexed _name);
     // event GoalCancelled(address indexed _from, string indexed _name);
@@ -25,9 +27,11 @@ contract HabitTracker {
         uint256 deadline;
         uint256 stake;
         uint256 progress;
+        Status status;
     }
 
-    // TODO: Investigate scalability issues, maybe a mapping(address => mapping(string => Goal)) is more efficient when arrays are large
+    // TODO: Investigate scalability issues, maybe a mapping(address => mapping(string => Goal)) is more efficient when arrays are large.
+    //       Probably the above makes sense since most of the reads are using the "findGoalIndex" function
     mapping(address => Goal[]) goals;
 
     function createGoal(address _user, string memory _name, uint256 _target, uint256 _deadline, string memory _unit) payable public {
@@ -35,55 +39,55 @@ contract HabitTracker {
         require(_deadline > block.timestamp, "A past goal cannot be created");
         require(!doesGoalExists(_user, _name), "User already has a goal with that name");
 
-        Goal memory _goal = Goal(_name, _target, _unit, _deadline, msg.value, 0);
+        Goal memory _goal = Goal(_name, _target, _unit, _deadline, msg.value, 0, Status.ONGOING);
         goals[_user].push(_goal);
     }
 
     // TODO: Function to motivate a user further
     function increaseStake(address _user, string memory _name) goalExists(_user, _name) payable public {
-        uint _index = getGoalIndex(_user, _name);
+        uint _index = findGoalIndex(_user, _name);
         goals[_user][_index].stake += msg.value;
     }
 
     // TODO: Add the option to progress other user habit? In edge cases (money being lost or person died)
     // TODO: Consider that when integrations exists, maybe we want to block the user from upgrading their own goal manually
     function addProgress(address _user, string memory _name, uint256 _value) goalExists(_user, _name) onlyOwner(_user) public {
-        uint _index = getGoalIndex(_user, _name);
+        uint _index = findGoalIndex(_user, _name);
         goals[_user][_index].progress += _value;
         // TODO: Check if habit has been completed
     }
 
-    // TODO: Add notion of privacy?
-    function getProgress(address payable _user, string memory _name) onlyOwner(_user) view public returns (uint256) {
-        uint _index = getGoalIndex(_user, _name);
-        return goals[msg.sender][_index].progress;
-    }
-
     function completeGoal(address payable _user, string memory _name) goalExists(_user, _name) onlyOwner(_user) public {
-        uint _index = getGoalIndex(_user, _name);
+        uint _index = findGoalIndex(_user, _name);
         Goal memory goal = goals[_user][_index];
         require(goal.progress >= goal.target);
         _user.transfer(goal.stake);
+        goals[_user][_index].status = Status.COMPLETED;
     }
 
     function failGoal(address payable _user, string memory _name) goalExists(_user, _name) onlyOwner(_user) public {
-        uint _index = getGoalIndex(_user, _name);
+        uint _index = findGoalIndex(_user, _name);
         Goal memory goal = goals[_user][_index];
         require(goal.progress < goal.target && goal.deadline < block.timestamp);
-        // TODO: Probably makes more sense to have the goal as an state machine (FAILED)
-
-        // TODO: Move deletion to a separate function, also deleting and leaving gaps could be a bad idea
-        // delete goals[_user][_index];
-
+        goals[_user][_index].status = Status.FAILED;
         // TODO: Do something with the remaining funds
     }
 
     // TODO: Add the notion of an non-cancellable goal
     function cancelGoal(address payable _user, string memory _name) goalExists(_user, _name) public {
-        uint _index = getGoalIndex(_user, _name);
+        uint _index = findGoalIndex(_user, _name);
         Goal memory goal = goals[_user][_index];
         _user.transfer(goal.stake);
-        // TODO: Probably makes more sense to have the goal as an state machine (CANCELLED)
+        goals[_user][_index].status = Status.CANCELLED;
+    }
+
+    function getGoal(address payable _user, string memory _name) goalExists(_user, _name) view public returns(Goal memory) {
+        uint _index = findGoalIndex(_user, _name);
+        return goals[_user][_index];
+    }
+
+    function getGoals(address payable _user) onlyOwner(_user) view public returns(Goal[] memory) {
+        return goals[_user];
     }
 
     // Probably this function will be called by a cron job or a generous user
@@ -113,7 +117,7 @@ contract HabitTracker {
     }
 
     function areEqual(string memory a, string memory b) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
+        return keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b)));
     }
 
     function doesGoalExists(address _user, string memory _name) internal view returns (bool) {
@@ -125,7 +129,7 @@ contract HabitTracker {
         return false;
     }
 
-    function getGoalIndex(address _user, string memory _name) internal view returns (uint) {
+    function findGoalIndex(address _user, string memory _name) internal view returns (uint) {
         for (uint i = 0; i < goals[_user].length; i++) {
             if (areEqual(goals[_user][i].name, _name)) {
                 return i;
@@ -133,5 +137,4 @@ contract HabitTracker {
         }
         return 0;
     }
-
 }
