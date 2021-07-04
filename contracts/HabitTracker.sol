@@ -38,6 +38,8 @@ contract HabitTracker {
         // TODO: Extract domain logic into functions (isGoalCompleted, isGoalFinished...)
         require(_deadline > block.timestamp, "A past goal cannot be created");
         require(!doesGoalExists(_user, _name), "User already has a goal with that name");
+        // TODO: Probably a higher minimum will be required if funds are split in some way
+        require(msg.value > 0, "The goal stake cannot be empty");
 
         Goal memory _goal = Goal(_name, _target, _unit, _deadline, msg.value, 0, Status.ONGOING);
         goals[_user].push(_goal);
