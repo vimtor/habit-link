@@ -12,7 +12,12 @@ contract HabitTracker {
     // TODO: Do something with the frequency
     // enum Frequency {NONE,DAILY, WEEKLY, MONTHLY, YEARLY}
 
-    enum Status {ONGOING, COMPLETED, CANCELLED, FAILED}
+    enum Status {
+        ONGOING,
+        COMPLETED,
+        CANCELLED,
+        FAILED
+    }
 
     // TODO: Investigate why events are useful and what are their gas implications
     // event GoalCompleted(address indexed _from, string indexed _name);
@@ -34,7 +39,13 @@ contract HabitTracker {
     //       Probably the above makes sense since most of the reads are using the "findGoalIndex" function
     mapping(address => Goal[]) goals;
 
-    function createGoal(address _user, string memory _name, uint256 _target, uint256 _deadline, string memory _unit) payable public {
+    function createGoal(
+        address _user,
+        string memory _name,
+        uint256 _target,
+        uint256 _deadline,
+        string memory _unit
+    ) public payable {
         // TODO: Extract domain logic into functions (isGoalCompleted, isGoalFinished...)
         require(_deadline > block.timestamp, "A past goal cannot be created");
         require(!doesGoalExists(_user, _name), "User already has a goal with that name");
@@ -46,29 +57,33 @@ contract HabitTracker {
     }
 
     // TODO: Function to motivate a user further
-    function increaseStake(address _user, string memory _name) goalExists(_user, _name) payable public {
-        uint _index = findGoalIndex(_user, _name);
+    function increaseStake(address _user, string memory _name) public payable goalExists(_user, _name) {
+        uint256 _index = findGoalIndex(_user, _name);
         goals[_user][_index].stake += msg.value;
     }
 
     // TODO: Add the option to progress other user habit? In edge cases (money being lost or person died)
     // TODO: Consider that when integrations exists, maybe we want to block the user from upgrading their own goal manually
-    function addProgress(address _user, string memory _name, uint256 _value) goalExists(_user, _name) onlyOwner(_user) public {
-        uint _index = findGoalIndex(_user, _name);
+    function addProgress(
+        address _user,
+        string memory _name,
+        uint256 _value
+    ) public goalExists(_user, _name) onlyOwner(_user) {
+        uint256 _index = findGoalIndex(_user, _name);
         goals[_user][_index].progress += _value;
         // TODO: Check if habit has been completed
     }
 
-    function completeGoal(address payable _user, string memory _name) goalExists(_user, _name) onlyOwner(_user) public {
-        uint _index = findGoalIndex(_user, _name);
+    function completeGoal(address payable _user, string memory _name) public goalExists(_user, _name) onlyOwner(_user) {
+        uint256 _index = findGoalIndex(_user, _name);
         Goal memory goal = goals[_user][_index];
         require(goal.progress >= goal.target);
         _user.transfer(goal.stake);
         goals[_user][_index].status = Status.COMPLETED;
     }
 
-    function failGoal(address payable _user, string memory _name) goalExists(_user, _name) onlyOwner(_user) public {
-        uint _index = findGoalIndex(_user, _name);
+    function failGoal(address payable _user, string memory _name) public goalExists(_user, _name) onlyOwner(_user) {
+        uint256 _index = findGoalIndex(_user, _name);
         Goal memory goal = goals[_user][_index];
         require(goal.progress < goal.target && goal.deadline < block.timestamp);
         goals[_user][_index].status = Status.FAILED;
@@ -76,25 +91,25 @@ contract HabitTracker {
     }
 
     // TODO: Add the notion of an non-cancellable goal
-    function cancelGoal(address payable _user, string memory _name) goalExists(_user, _name) public {
-        uint _index = findGoalIndex(_user, _name);
+    function cancelGoal(address payable _user, string memory _name) public goalExists(_user, _name) {
+        uint256 _index = findGoalIndex(_user, _name);
         Goal memory goal = goals[_user][_index];
         _user.transfer(goal.stake);
         goals[_user][_index].status = Status.CANCELLED;
     }
 
-    function getGoal(address payable _user, string memory _name) goalExists(_user, _name) view public returns(Goal memory) {
-        uint _index = findGoalIndex(_user, _name);
+    function getGoal(address payable _user, string memory _name) public view goalExists(_user, _name) returns (Goal memory) {
+        uint256 _index = findGoalIndex(_user, _name);
         return goals[_user][_index];
     }
 
-    function getGoals(address payable _user) onlyOwner(_user) view public returns(Goal[] memory) {
+    function getGoals(address payable _user) public view onlyOwner(_user) returns (Goal[] memory) {
         return goals[_user];
     }
 
     // Probably this function will be called by a cron job or a generous user
     function checkGoals(address payable _user) public {
-        for (uint i = 0; i < goals[_user].length; i++) {
+        for (uint256 i = 0; i < goals[_user].length; i++) {
             Goal memory _goal = goals[_user][i];
             // TODO: Investigate and add an error factor margin
             bool isGoalFinished = block.timestamp > _goal.deadline;
@@ -123,7 +138,7 @@ contract HabitTracker {
     }
 
     function doesGoalExists(address _user, string memory _name) internal view returns (bool) {
-        for (uint i = 0; i < goals[_user].length; i++) {
+        for (uint256 i = 0; i < goals[_user].length; i++) {
             if (areEqual(goals[_user][i].name, _name)) {
                 return true;
             }
@@ -131,8 +146,8 @@ contract HabitTracker {
         return false;
     }
 
-    function findGoalIndex(address _user, string memory _name) internal view returns (uint) {
-        for (uint i = 0; i < goals[_user].length; i++) {
+    function findGoalIndex(address _user, string memory _name) internal view returns (uint256) {
+        for (uint256 i = 0; i < goals[_user].length; i++) {
             if (areEqual(goals[_user][i].name, _name)) {
                 return i;
             }
