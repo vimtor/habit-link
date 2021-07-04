@@ -78,7 +78,7 @@ describe("HabitTracker", () => {
         });
 
         it("throws if the deadline is already over", async () => {
-            await expect(tracker.createGoal(owner.address, "reading", 10, 0, "pages")).to.be.revertedWith("past goal cannot be created");
+            await expect(tracker.createGoal(owner.address, "reading", 10, 0, "pages", { value: 10 })).to.be.revertedWith("past goal cannot be created");
         });
     });
 
@@ -101,10 +101,6 @@ describe("HabitTracker", () => {
             await tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
             await tracker.createGoal(anonymous.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
             await expect(tracker.addProgress(anonymous.address, "running", 1)).to.be.revertedWith("function can only be called by the owner");
-        });
-
-        it("throws if user has zero goals", async () => {
-            await expect(tracker.addProgress(owner.address, "reading", 1)).to.be.revertedWith("does not have any goals");
         });
 
         it("throws if goal with a name does not exist", async () => {

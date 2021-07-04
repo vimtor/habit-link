@@ -35,9 +35,7 @@ contract HabitTracker {
         Status status;
     }
 
-    // TODO: Investigate scalability issues, maybe a mapping(address => mapping(string => Goal)) is more efficient when arrays are large.
-    //       Probably the above makes sense since most of the reads are using the "findGoalIndex" function
-    mapping(address => Goal[]) goals;
+    mapping(address => mapping(string => Goal)) goals;
 
     function createGoal(
         address _user,
@@ -45,21 +43,13 @@ contract HabitTracker {
         uint256 _target,
         uint256 _deadline,
         string memory _unit
-    ) public payable {
-        // TODO: Extract domain logic into functions (isGoalCompleted, isGoalFinished...)
-        require(_deadline > block.timestamp, "A past goal cannot be created");
-        require(!doesGoalExists(_user, _name), "User already has a goal with that name");
-        // TODO: Probably a higher minimum will be required if funds are split in some way
-        require(msg.value > 0, "The goal stake cannot be empty");
-
-        Goal memory _goal = Goal(_name, _target, _unit, _deadline, msg.value, 0, Status.ONGOING);
-        goals[_user].push(_goal);
+    ) public payable onlyNewGoal(_user, _name) onlyMinimumStake(msg.value) onlyFutureGoal(_deadline) {
+        goals[_user][_name] = Goal(_name, _target, _unit, _deadline, msg.value, 0, Status.ONGOING);
     }
 
     // TODO: Function to motivate a user further
-    function increaseStake(address _user, string memory _name) public payable goalExists(_user, _name) {
-        uint256 _index = findGoalIndex(_user, _name);
-        goals[_user][_index].stake += msg.value;
+    function increaseStake(address _user, string memory _name) public payable onlyExistingGoal(_user, _name) {
+        goals[_user][_name].stake += msg.value;
     }
 
     // TODO: Add the option to progress other user habit? In edge cases (money being lost or person died)
@@ -68,57 +58,44 @@ contract HabitTracker {
         address _user,
         string memory _name,
         uint256 _value
-    ) public goalExists(_user, _name) onlyOwner(_user) {
-        uint256 _index = findGoalIndex(_user, _name);
-        goals[_user][_index].progress += _value;
+    ) public onlyExistingGoal(_user, _name) onlyOwner(_user) {
+        goals[_user][_name].progress += _value;
         // TODO: Check if habit has been completed
     }
 
-    function completeGoal(address payable _user, string memory _name) public goalExists(_user, _name) onlyOwner(_user) {
-        uint256 _index = findGoalIndex(_user, _name);
-        Goal memory goal = goals[_user][_index];
+    function completeGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) onlyOwner(_user) {
+        Goal memory goal = goals[_user][_name];
         require(goal.progress >= goal.target, "The goal has not been reached yet");
         _user.transfer(goal.stake);
-        goals[_user][_index].status = Status.COMPLETED;
+        goals[_user][_name].status = Status.COMPLETED;
     }
 
-    function failGoal(address payable _user, string memory _name) public goalExists(_user, _name) onlyOwner(_user) {
-        uint256 _index = findGoalIndex(_user, _name);
-        Goal memory goal = goals[_user][_index];
+    function failGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) onlyOwner(_user) {
+        Goal memory goal = goals[_user][_name];
         require(goal.progress < goal.target && goal.deadline < block.timestamp);
-        goals[_user][_index].status = Status.FAILED;
+        goals[_user][_name].status = Status.FAILED;
         // TODO: Do something with the remaining funds
     }
 
     // TODO: Add the notion of an non-cancellable goal
-    function cancelGoal(address payable _user, string memory _name) public goalExists(_user, _name) {
-        uint256 _index = findGoalIndex(_user, _name);
-        Goal memory goal = goals[_user][_index];
-        _user.transfer(goal.stake);
-        goals[_user][_index].status = Status.CANCELLED;
+    function cancelGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) {
+        _user.transfer(goals[_user][_name].stake);
+        goals[_user][_name].status = Status.CANCELLED;
     }
 
-    function getGoal(address payable _user, string memory _name) public view goalExists(_user, _name) returns (Goal memory) {
-        uint256 _index = findGoalIndex(_user, _name);
-        return goals[_user][_index];
-    }
-
-    function getGoals(address payable _user) public view onlyOwner(_user) returns (Goal[] memory) {
-        return goals[_user];
+    function getGoal(address payable _user, string memory _name) public view onlyExistingGoal(_user, _name) returns (Goal memory) {
+        return goals[_user][_name];
     }
 
     // Probably this function will be called by a cron job or a generous user
-    function checkGoals(address payable _user) public {
-        for (uint256 i = 0; i < goals[_user].length; i++) {
-            Goal memory _goal = goals[_user][i];
-            // TODO: Investigate and add an error factor margin
-            bool isGoalFinished = block.timestamp > _goal.deadline;
-            bool isGoalSucceeded = _goal.progress >= _goal.stake;
-            if (isGoalSucceeded) {
-                completeGoal(_user, _goal.name);
-            } else if (isGoalFinished) {
-                failGoal(_user, _goal.name);
-            }
+    function checkGoal(address payable _user, string memory _name) public {
+        Goal memory _goal = goals[_user][_name];
+        bool isGoalFinished = block.timestamp > _goal.deadline;
+        bool isGoalSucceeded = _goal.progress >= _goal.stake;
+        if (isGoalSucceeded) {
+            completeGoal(_user, _name);
+        } else if (isGoalFinished) {
+            failGoal(_user, _name);
         }
     }
 
@@ -127,31 +104,24 @@ contract HabitTracker {
         _;
     }
 
-    modifier goalExists(address _user, string memory _name) {
-        require(goals[_user].length > 0, "User does not have any goals");
-        require(doesGoalExists(_user, _name), "User does not have a goal with that name");
+    modifier onlyExistingGoal(address _user, string memory _name) {
+        require(goals[_user][_name].stake != 0, "User does not have a goal with that name");
         _;
     }
 
-    function areEqual(string memory a, string memory b) internal pure returns (bool) {
-        return keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b)));
+    modifier onlyNewGoal(address _user, string memory _name) {
+        require(goals[_user][_name].stake == 0, "User already has a goal with that name");
+        _;
     }
 
-    function doesGoalExists(address _user, string memory _name) internal view returns (bool) {
-        for (uint256 i = 0; i < goals[_user].length; i++) {
-            if (areEqual(goals[_user][i].name, _name)) {
-                return true;
-            }
-        }
-        return false;
+    modifier onlyMinimumStake(uint256 amount) {
+        // TODO: Probably a higher minimum will be required if funds are split in some way
+        require(amount > 0, "The goal stake cannot be empty");
+        _;
     }
 
-    function findGoalIndex(address _user, string memory _name) internal view returns (uint256) {
-        for (uint256 i = 0; i < goals[_user].length; i++) {
-            if (areEqual(goals[_user][i].name, _name)) {
-                return i;
-            }
-        }
-        return 0;
+    modifier onlyFutureGoal(uint256 _deadline) {
+        require(_deadline > block.timestamp, "A past goal cannot be created");
+        _;
     }
 }
