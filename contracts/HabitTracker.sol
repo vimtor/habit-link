@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 // TODO: Maybe adding the ability to add to which user should the money go back so people can work towards something
 // TODO: Maybe adding the ability to have several contribute towards a goal
-// TODO: Maybe take gas into account so users don't lose anything but then a fee to cover the gas or a minimum goal length should be added
 // TODO: Add the possibility to have negative goals (smoke less)
 // TODO: Add the possibility to have boolean goals. This makes sense if frequency feature is implemented
 // TODO: Maybe adding a fee is a good idea
@@ -48,6 +47,7 @@ contract HabitTracker {
     }
 
     // TODO: Function to motivate a user further
+    // TODO: This has privacy implications if those are implemented
     function increaseStake(address _user, string memory _name) public payable onlyExistingGoal(_user, _name) {
         goals[_user][_name].stake += msg.value;
     }
@@ -58,49 +58,58 @@ contract HabitTracker {
         address _user,
         string memory _name,
         uint256 _value
-    ) public onlyExistingGoal(_user, _name) onlyOwner(_user) {
+    ) public onlyOwner(_user) onlyExistingGoal(_user, _name) {
         goals[_user][_name].progress += _value;
         // TODO: Check if habit has been completed
     }
 
-    function completeGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) onlyOwner(_user) {
-        Goal memory goal = goals[_user][_name];
-        require(goal.progress >= goal.target, "The goal has not been reached yet");
-        _user.transfer(goal.stake);
+    function completeGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) onlyCompletedGoal(_user, _name) {
+        _user.transfer(goals[_user][_name].stake);
         goals[_user][_name].status = Status.COMPLETED;
     }
 
-    function failGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) onlyOwner(_user) {
+    function failGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) onlyFailedGoal(_user, _name) {
         Goal memory goal = goals[_user][_name];
         require(goal.progress < goal.target && goal.deadline < block.timestamp);
         goals[_user][_name].status = Status.FAILED;
         // TODO: Do something with the remaining funds
     }
 
-    // TODO: Add the notion of an non-cancellable goal
-    function cancelGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) {
+    // TODO: Add the notion of an non-cancellable goal?
+    function cancelGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) {
         _user.transfer(goals[_user][_name].stake);
         goals[_user][_name].status = Status.CANCELLED;
+        // TODO: Do not return the investments when implemented
     }
 
+    // TODO: Decide privacy concerns
     function getGoal(address payable _user, string memory _name) public view onlyExistingGoal(_user, _name) returns (Goal memory) {
         return goals[_user][_name];
     }
 
-    // Probably this function will be called by a cron job or a generous user
+    // Called by a cron job or generous user
     function checkGoal(address payable _user, string memory _name) public {
-        Goal memory _goal = goals[_user][_name];
-        bool isGoalFinished = block.timestamp > _goal.deadline;
-        bool isGoalSucceeded = _goal.progress >= _goal.stake;
-        if (isGoalSucceeded) {
-            completeGoal(_user, _name);
-        } else if (isGoalFinished) {
+        if (isGoalOver(_user, _name) && !isGoalCompleted(_user, _name)) {
             failGoal(_user, _name);
         }
     }
 
+    function isGoalOver(address _user, string memory _name) internal view returns (bool) {
+        return block.timestamp > goals[_user][_name].deadline;
+    }
+
+    // TODO: Should this include the onlyUser modifier?
+    function isGoalCompleted(address _user, string memory _name) internal view returns (bool) {
+        return goals[_user][_name].progress >= goals[_user][_name].target;
+    }
+
     modifier onlyOwner(address _user) {
         require(msg.sender == _user, "This function can only be called by the owner");
+        _;
+    }
+
+    modifier onlyCompletedGoal(address _user, string memory _name) {
+        require(isGoalCompleted(_user, _name), "The goal has not been reached yet");
         _;
     }
 
@@ -122,6 +131,11 @@ contract HabitTracker {
 
     modifier onlyFutureGoal(uint256 _deadline) {
         require(_deadline > block.timestamp, "A past goal cannot be created");
+        _;
+    }
+
+    modifier onlyFailedGoal(address _user, string memory _name) {
+        require(!isGoalCompleted(_user, _name) && isGoalOver(_user, _name), "The goal is still ongoing");
         _;
     }
 }
