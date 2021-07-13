@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { expect, use } from "chai";
 import { solidity } from "ethereum-waffle";
 import { HabitTracker } from "../typechain";
@@ -18,13 +18,20 @@ describe("HabitTracker", () => {
     let tracker: HabitTracker;
     let owner: SignerWithAddress;
     let anonymous: SignerWithAddress;
+    let company: SignerWithAddress;
+    let now: number;
 
     beforeEach(async () => {
         const habitTrackerContract = await ethers.getContractFactory("HabitTracker");
         const signers = await ethers.getSigners();
         owner = signers[0];
         anonymous = signers[1];
-        tracker = (await habitTrackerContract.deploy()) as HabitTracker;
+        company = signers[2];
+        tracker = (await habitTrackerContract.deploy(company.address)) as HabitTracker;
+
+        const number = await tracker.provider.getBlockNumber();
+        const block = await tracker.provider.getBlock(number);
+        now = block.timestamp;
     });
 
     describe("create goal", () => {
@@ -42,13 +49,10 @@ describe("HabitTracker", () => {
 
         it("transfers funds on creation according to stake parameter", async () => {
             const stake = BigNumber.from(10000000000000);
-            const gasLimit = 300000;
-            const initialBalance = await owner.getBalance();
-
-            await tracker.createGoal(owner.address, "reading", 1, Date.now() + 10000, "pages", { value: stake, gasPrice: 1, gasLimit });
-
-            const currentBalance = await owner.getBalance();
-            expect(currentBalance).to.be.closeTo(initialBalance.sub(stake), gasLimit);
+            await expect(await tracker.createGoal(owner.address, "reading", 1, Date.now() + 10000, "pages", { value: stake })).to.changeEtherBalance(
+                owner,
+                -stake
+            );
             const goal = await tracker.getGoal(owner.address, "reading");
             expect(goal.stake).to.equal(stake);
         });
@@ -79,6 +83,12 @@ describe("HabitTracker", () => {
 
         it("throws if the deadline is already over", async () => {
             await expect(tracker.createGoal(owner.address, "reading", 10, 0, "pages", { value: 10 })).to.be.revertedWith("past goal cannot be created");
+        });
+
+        it("emits a started event", async () => {
+            await expect(tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 }))
+                .to.emit(tracker, "GoalStarted")
+                .withArgs(owner.address, "reading");
         });
     });
 
@@ -128,15 +138,17 @@ describe("HabitTracker", () => {
 
         it("transfers stake back when target has been reached", async () => {
             const stake = BigNumber.from(10000000000000);
-            const gasLimit = 300000;
             await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: stake });
             await tracker.addProgress(owner.address, "running", 12);
+            await expect(await tracker.completeGoal(owner.address, "running")).to.changeEtherBalance(owner, stake);
+        });
 
-            const initialBalance = await owner.getBalance();
-            await tracker.completeGoal(owner.address, "running", { gasPrice: 1, gasLimit });
-
-            const currentBalance = await owner.getBalance();
-            expect(currentBalance).to.be.closeTo(initialBalance.add(stake), gasLimit);
+        it("throws if goal is already marked as complete", async () => {
+            const stake = BigNumber.from(10000000000000);
+            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: stake });
+            await tracker.addProgress(owner.address, "running", 12);
+            await tracker.completeGoal(owner.address, "running");
+            await expect(tracker.completeGoal(owner.address, "running")).to.be.revertedWith("Goal must be ongoing");
         });
 
         it("goal status transitions to COMPLETED when target has been reached", async () => {
@@ -145,6 +157,46 @@ describe("HabitTracker", () => {
             await tracker.completeGoal(owner.address, "running");
             const goal = await tracker.getGoal(owner.address, "running");
             expect(goal.status).to.be.equal(Status.COMPLETED);
+        });
+
+        it("emits a completed event", async () => {
+            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+            await tracker.addProgress(owner.address, "running", 12);
+            await expect(tracker.completeGoal(owner.address, "running")).to.emit(tracker, "GoalCompleted").withArgs(owner.address, "running");
+        });
+    });
+
+    describe("fail goal", () => {
+        it("throws if goal with a name does not exist", async () => {
+            await expect(tracker.failGoal(owner.address, "reading")).to.be.revertedWith("does not have a goal with that name");
+        });
+
+        it("throws if goal is still ongoing", async () => {
+            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+            await expect(tracker.failGoal(owner.address, "running")).to.be.revertedWith("goal is still ongoing");
+        });
+
+        it("transitions goal status to FAILED", async () => {
+            await tracker.createGoal(owner.address, "running", 10, now + 60, "miles", { value: 10 });
+            await network.provider.send("evm_increaseTime", [61]);
+            await network.provider.send("evm_mine");
+            await tracker.failGoal(owner.address, "running");
+            const goal = await tracker.getGoal(owner.address, "running");
+            expect(goal.status).to.be.equal(Status.FAILED);
+        });
+
+        it("transfers stake to company", async () => {
+            await tracker.createGoal(owner.address, "running", 10, now + 60, "miles", { value: 10 });
+            await network.provider.send("evm_increaseTime", [61]);
+            await network.provider.send("evm_mine");
+            await expect(await tracker.failGoal(owner.address, "running")).to.changeEtherBalance(company, 10);
+        });
+
+        it("emits a failed event", async () => {
+            await tracker.createGoal(owner.address, "running", 10, now + 60, "miles", { value: 10 });
+            await network.provider.send("evm_increaseTime", [61]);
+            await network.provider.send("evm_mine");
+            await expect(tracker.failGoal(owner.address, "running")).to.emit(tracker, "GoalFailed").withArgs(owner.address, "running");
         });
     });
 });
