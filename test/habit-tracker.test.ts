@@ -14,6 +14,11 @@ enum Status {
     FAILED,
 }
 
+enum Category {
+    MORE,
+    LESS,
+}
+
 describe("HabitTracker", () => {
     let tracker: HabitTracker;
     let owner: SignerWithAddress;
@@ -34,67 +39,96 @@ describe("HabitTracker", () => {
         now = block.timestamp;
     });
 
-    describe("create goal", () => {
-        it("initializes progress to 0 by default", async () => {
-            await tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
-            const goal = await tracker.getGoal(owner.address, "reading");
-            expect(goal.progress).to.equal(0);
-        });
+    // Create goal helper with sensible defaults
+    const createGoal = async (options = {}) => {
+        const goal = {
+            user: owner.address,
+            category: Category.MORE,
+            progress: 0,
+            target: 100,
+            name: "reading",
+            unit: "pages",
+            deadline: now + 1000,
+            stake: BigNumber.from(100),
+            ...options,
+        };
+        return tracker.createGoal(goal.user, goal.name, goal.category, goal.progress, goal.target, goal.unit, goal.deadline, { value: goal.stake });
+    };
 
-        it("initializes status to ONGOING by default", async () => {
-            await tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
+    const increaseTime = async (amount: number) => {
+        await network.provider.send("evm_increaseTime", [amount]);
+        await network.provider.send("evm_mine");
+        now += amount;
+    };
+
+    describe("create goal", () => {
+        it("initializes goal correctly", async () => {
+            const options = {
+                user: owner.address,
+                category: Category.MORE,
+                progress: 0,
+                target: 100,
+                name: "reading",
+                unit: "pages",
+                deadline: now + 1000,
+                stake: BigNumber.from(100),
+                status: Status.ONGOING,
+            };
+
+            await createGoal(options);
             const goal = await tracker.getGoal(owner.address, "reading");
-            expect(goal.status).to.equal(Status.ONGOING);
+
+            expect(goal.name).to.equal(options.name);
+            expect(goal.category).to.equal(options.category);
+            expect(goal.progress).to.equal(options.progress);
+            expect(goal.target).to.equal(options.target);
+            expect(goal.unit).to.equal(options.unit);
+            expect(goal.deadline).to.equal(options.deadline);
+            expect(goal.stake).to.equal(options.stake);
+            expect(goal.status).to.equal(options.status);
         });
 
         it("transfers funds on creation according to stake parameter", async () => {
             const stake = BigNumber.from(10000000000000);
-            await expect(await tracker.createGoal(owner.address, "reading", 1, Date.now() + 10000, "pages", { value: stake })).to.changeEtherBalance(
-                owner,
-                -stake
-            );
+            await expect(await createGoal({ stake })).to.changeEtherBalance(owner, -stake);
             const goal = await tracker.getGoal(owner.address, "reading");
             expect(goal.stake).to.equal(stake);
         });
 
-        it("throws if value is zero", async () => {
-            await expect(tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 0 })).to.be.revertedWith(
-                "goal stake cannot be empty"
-            );
+        it("reverts if value is zero", async () => {
+            await expect(createGoal({ stake: BigNumber.from(0) })).to.be.revertedWith("The goal stake cannot be empty");
         });
 
         it("can create a goal for other user", async () => {
-            await tracker.createGoal(anonymous.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
+            await expect(createGoal({ user: anonymous.address })).not.to.be.reverted;
         });
 
         it("can create multiple goals for the same user", async () => {
-            await tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+            await createGoal({ name: "reading", unit: "pages" });
+            await createGoal({ name: "running", unit: "miles" });
             const readingGoal = await tracker.getGoal(owner.address, "reading");
             const runningGoal = await tracker.getGoal(owner.address, "running");
             expect(readingGoal.progress).to.equal(0);
             expect(runningGoal.progress).to.equal(0);
         });
 
-        it("cannot create multiple goals with the same name", async () => {
-            await tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
-            await expect(tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages")).to.be.revertedWith("already has a goal with that name");
+        it("reverts when creating two goals with the same name", async () => {
+            await createGoal({ name: "reading " });
+            await expect(createGoal({ name: "reading " })).to.be.revertedWith("already has a goal with that name");
         });
 
-        it("throws if the deadline is already over", async () => {
-            await expect(tracker.createGoal(owner.address, "reading", 10, 0, "pages", { value: 10 })).to.be.revertedWith("past goal cannot be created");
+        it("reverts if the deadline is already over", async () => {
+            await expect(createGoal({ deadline: 0 })).to.be.revertedWith("past goal cannot be created");
         });
 
         it("emits a started event", async () => {
-            await expect(tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 }))
-                .to.emit(tracker, "GoalStarted")
-                .withArgs(owner.address, "reading");
+            await expect(createGoal()).to.emit(tracker, "GoalStarted").withArgs(owner.address, "reading");
         });
     });
 
     describe("update progress", () => {
         it("updates the progress by the specified amount", async () => {
-            await tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
+            await createGoal({ name: "reading" });
             let progress = (await tracker.getGoal(owner.address, "reading")).progress;
             expect(progress).to.equal(0);
 
@@ -107,96 +141,90 @@ describe("HabitTracker", () => {
             expect(progress).to.equal(3);
         });
 
-        it("throws if user adding progress is not the owner", async () => {
-            await tracker.createGoal(owner.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
-            await tracker.createGoal(anonymous.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+        it("reverts if user adding progress is not the owner", async () => {
+            await createGoal({ user: owner.address, name: "reading", unit: "pages" });
+            await createGoal({ user: anonymous.address, name: "running", unit: "miles" });
             await expect(tracker.addProgress(anonymous.address, "running", 1)).to.be.revertedWith("function can only be called by the owner");
         });
 
-        it("throws if goal with a name does not exist", async () => {
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+        it("reverts if goal with a name does not exist", async () => {
+            await createGoal({ name: "running" });
             await expect(tracker.addProgress(owner.address, "reading", 1)).to.be.revertedWith("does not have a goal with that name");
         });
     });
 
     describe("complete goal", () => {
-        it("throws if goal with a name does not exist", async () => {
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+        it("reverts if goal with a name does not exist", async () => {
+            await createGoal({ name: "running" });
             await expect(tracker.completeGoal(owner.address, "reading")).to.be.revertedWith("does not have a goal with that name");
         });
 
-        it("throws if user adding progress is not the owner", async () => {
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
-            await tracker.createGoal(anonymous.address, "reading", 10, Date.now() + 10000, "pages", { value: 10 });
+        it("reverts if user adding progress is not the owner", async () => {
+            await createGoal({ user: owner.address, name: "reading", unit: "pages" });
+            await createGoal({ user: anonymous.address, name: "running", unit: "miles" });
             await expect(tracker.completeGoal(anonymous.address, "reading")).to.be.revertedWith("function can only be called by the owner");
         });
 
-        it("throws if goal target has not been reached", async () => {
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+        it("reverts if goal target has not been reached", async () => {
+            await createGoal({ name: "running", progress: 0, target: 10 });
             await expect(tracker.completeGoal(owner.address, "running")).to.be.revertedWith("goal has not been reached yet");
         });
 
         it("transfers stake back when target has been reached", async () => {
             const stake = BigNumber.from(10000000000000);
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: stake });
-            await tracker.addProgress(owner.address, "running", 12);
+            await createGoal({ name: "running", progress: 12, target: 10, stake });
             await expect(await tracker.completeGoal(owner.address, "running")).to.changeEtherBalance(owner, stake);
         });
 
-        it("throws if goal is already marked as complete", async () => {
+        it("reverts if goal is already marked as complete", async () => {
             const stake = BigNumber.from(10000000000000);
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: stake });
-            await tracker.addProgress(owner.address, "running", 12);
+            await createGoal({ name: "running", progress: 12, target: 10, stake });
             await tracker.completeGoal(owner.address, "running");
             await expect(tracker.completeGoal(owner.address, "running")).to.be.revertedWith("Goal must be ongoing");
         });
 
         it("goal status transitions to COMPLETED when target has been reached", async () => {
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
-            await tracker.addProgress(owner.address, "running", 12);
+            await createGoal({ name: "running", progress: 12, target: 10 });
             await tracker.completeGoal(owner.address, "running");
             const goal = await tracker.getGoal(owner.address, "running");
             expect(goal.status).to.be.equal(Status.COMPLETED);
         });
 
         it("emits a completed event", async () => {
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
-            await tracker.addProgress(owner.address, "running", 12);
+            await createGoal({ name: "running", progress: 12, target: 10 });
             await expect(tracker.completeGoal(owner.address, "running")).to.emit(tracker, "GoalCompleted").withArgs(owner.address, "running");
         });
     });
 
     describe("fail goal", () => {
-        it("throws if goal with a name does not exist", async () => {
+        it("reverts if goal with a name does not exist", async () => {
             await expect(tracker.failGoal(owner.address, "reading")).to.be.revertedWith("does not have a goal with that name");
         });
 
-        it("throws if goal is still ongoing", async () => {
-            await tracker.createGoal(owner.address, "running", 10, Date.now() + 10000, "miles", { value: 10 });
+        it("reverts if goal is still ongoing", async () => {
+            await createGoal({ name: "running" });
             await expect(tracker.failGoal(owner.address, "running")).to.be.revertedWith("goal is still ongoing");
         });
 
         it("transitions goal status to FAILED", async () => {
-            await tracker.createGoal(owner.address, "running", 10, now + 60, "miles", { value: 10 });
-            await network.provider.send("evm_increaseTime", [61]);
-            await network.provider.send("evm_mine");
-            await tracker.failGoal(owner.address, "running");
-            const goal = await tracker.getGoal(owner.address, "running");
+            await createGoal({ name: "reading", deadline: now + 60 });
+            await increaseTime(61);
+            await tracker.failGoal(owner.address, "reading");
+            const goal = await tracker.getGoal(owner.address, "reading");
             expect(goal.status).to.be.equal(Status.FAILED);
         });
 
         it("transfers stake to company", async () => {
-            await tracker.createGoal(owner.address, "running", 10, now + 60, "miles", { value: 10 });
-            await network.provider.send("evm_increaseTime", [61]);
-            await network.provider.send("evm_mine");
-            await expect(await tracker.failGoal(owner.address, "running")).to.changeEtherBalance(company, 10);
+            const stake = BigNumber.from(100);
+            await createGoal({ name: "reading", deadline: now + 60, stake });
+            await increaseTime(61);
+            await expect(await tracker.failGoal(owner.address, "reading")).to.changeEtherBalance(company, stake);
         });
 
         it("emits a failed event", async () => {
-            await tracker.createGoal(owner.address, "running", 10, now + 60, "miles", { value: 10 });
-            await network.provider.send("evm_increaseTime", [61]);
-            await network.provider.send("evm_mine");
-            await expect(tracker.failGoal(owner.address, "running")).to.emit(tracker, "GoalFailed").withArgs(owner.address, "running");
+            await createGoal({ name: "reading", deadline: now + 60 });
+            await increaseTime(61);
+            await expect(tracker.failGoal(owner.address, "reading")).to.emit(tracker, "GoalFailed").withArgs(owner.address, "reading");
         });
     });
 });

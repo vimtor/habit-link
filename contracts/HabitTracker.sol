@@ -13,6 +13,11 @@ contract HabitTracker {
         FAILED
     }
 
+    enum Category {
+        MORE,
+        LESS
+    }
+
     event GoalCompleted(address indexed _from, string indexed _name);
     event GoalCancelled(address indexed _from, string indexed _name);
     event GoalFailed(address indexed _from, string indexed _name);
@@ -20,11 +25,12 @@ contract HabitTracker {
 
     struct Goal {
         string name;
+        Category category;
+        uint256 progress;
         uint256 target;
         string unit;
         uint256 deadline;
         uint256 stake;
-        uint256 progress;
         Status status;
     }
 
@@ -38,12 +44,13 @@ contract HabitTracker {
     function createGoal(
         address _user,
         string memory _name,
+        Category _category,
+        uint256 _progress,
         uint256 _target,
-        uint256 _deadline,
-        string memory _unit
-    ) public payable onlyNewGoal(_user, _name) onlyMinimumStake(msg.value) onlyFutureGoal(_deadline) {
-        // TODO: Name cannot be an empty string
-        goals[_user][_name] = Goal(_name, _target, _unit, _deadline, msg.value, 0, Status.ONGOING);
+        string memory _unit,
+        uint256 _deadline
+    ) public payable onlyNewGoal(_user, _name) onlyValidName(_name) onlyMinimumStake(msg.value) onlyFutureGoal(_deadline) {
+        goals[_user][_name] = Goal(_name, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING);
         emit GoalStarted(_user, _name);
     }
 
@@ -129,6 +136,11 @@ contract HabitTracker {
 
     modifier onlyFutureGoal(uint256 _deadline) {
         require(_deadline > block.timestamp, "A past goal cannot be created");
+        _;
+    }
+
+    modifier onlyValidName(string memory _name) {
+        require(bytes(_name).length != 0, "Name cannot be empty");
         _;
     }
 

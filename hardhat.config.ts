@@ -26,6 +26,9 @@ const config: HardhatUserConfig = {
             },
         },
     },
+    typechain: {
+        outDir: "./typechain",
+    },
     solidity: "0.8.4",
 };
 
