@@ -6,9 +6,6 @@ pragma solidity ^0.8.0;
 // TODO: Maybe adding a fee is a good idea
 // TODO: Check how to invest the contract money to generate interests for the users
 contract HabitTracker {
-    // TODO: Do something with the frequency
-    // enum Frequency {NONE,DAILY, WEEKLY, MONTHLY, YEARLY}
-
     enum Status {
         ONGOING,
         COMPLETED,
