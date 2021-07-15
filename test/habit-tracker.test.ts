@@ -106,6 +106,10 @@ describe("HabitTracker", () => {
             await expect(createGoal({ bounty: BigNumber.from(0) })).to.be.revertedWith("The goal bounty cannot be empty");
         });
 
+        it("reverts if name is empty", async () => {
+            await expect(createGoal({ name: "" })).to.be.revertedWith("Goal name cannot be empty");
+        });
+
         it("can create a goal for other user", async () => {
             await expect(createGoal({ user: anonymous.address })).not.to.be.reverted;
         });

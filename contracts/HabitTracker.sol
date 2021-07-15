@@ -56,7 +56,7 @@ contract HabitTracker {
         string memory _unit,
         uint256 _deadline
     ) public payable {
-        require(bytes(_name).length != 0, "Name cannot be empty");
+        require(bytes(_name).length != 0, "Goal name cannot be empty");
         require(msg.value > 0, "The goal bounty cannot be empty");
         require(goals[_user][_name].bounty == 0, "User already has a goal with that name");
         require(_deadline > block.timestamp, "A past goal cannot be created");
