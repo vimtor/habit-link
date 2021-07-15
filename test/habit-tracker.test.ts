@@ -41,7 +41,7 @@ describe("HabitTracker", () => {
         now = block.timestamp;
     });
 
-    // Helper for creatin goal with sensible defaults
+    // Helper for creating goal with sensible defaults
     const createGoal = async (options = {}) => {
         const goal = {
             user: owner.address,

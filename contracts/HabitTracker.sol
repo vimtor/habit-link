@@ -41,7 +41,7 @@ contract HabitTracker {
     // TODO: Keep track of goal names for list display
     // TODO: Add mapping(string => address) for url display
     // TODO: Add a way to track statistics such as total amount staked, goals achieved, goals failed etc
-    // TODO: Also, by keeping track of the amount staked the contract could periodically transfer it to the company
+    // TODO: Also, by keeping track of the total amount staked, the contract could periodically transfer it to the company
 
     constructor(address payable _company) {
         company = _company;
