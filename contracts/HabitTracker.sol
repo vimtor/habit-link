@@ -27,6 +27,7 @@ contract HabitTracker {
         string description;
         Category category;
         uint256 progress;
+        uint256 initial;
         uint256 target;
         string unit;
         uint256 deadline;
@@ -62,7 +63,7 @@ contract HabitTracker {
         require(goals[_user][_name].bounty == 0, "User already has a goal with that name");
         require(_deadline > block.timestamp, "A past goal cannot be created");
         require(!isGoalCompleted(_category, _progress, _target), "Goal is already completed");
-        goals[_user][_name] = Goal(_name, _description, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING, block.timestamp);
+        goals[_user][_name] = Goal(_name, _description, _category, _progress, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING, block.timestamp);
         emit GoalStarted(_user, _name);
     }
 

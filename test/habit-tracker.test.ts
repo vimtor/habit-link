@@ -89,6 +89,7 @@ describe("HabitTracker", () => {
             expect(goal.category).to.equal(options.category);
             expect(goal.progress).to.equal(options.progress);
             expect(goal.target).to.equal(options.target);
+            expect(goal.initial).to.equal(options.progress);
             expect(goal.unit).to.equal(options.unit);
             expect(goal.deadline).to.equal(options.deadline);
             expect(goal.bounty).to.equal(options.bounty);
@@ -183,6 +184,13 @@ describe("HabitTracker", () => {
             await tracker.addProgress(owner.address, "running", 4);
             const progress = (await tracker.getGoal(owner.address, "running")).progress;
             expect(progress).to.equal(4);
+        });
+
+        it("does not alter initial value", async () => {
+            await createGoal({ name: "running", progress: 2, target: 10, category: Category.MORE });
+            await tracker.addProgress(owner.address, "running", 4);
+            const goal = await tracker.getGoal(owner.address, "running");
+            expect(goal.initial).to.equal(2);
         });
     });
 
