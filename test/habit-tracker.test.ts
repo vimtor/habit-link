@@ -17,6 +17,8 @@ enum Status {
 enum Category {
     MORE,
     LESS,
+    TOTAL_MORE,
+    TOTAL_LESS,
 }
 
 describe("HabitTracker", () => {
@@ -39,7 +41,7 @@ describe("HabitTracker", () => {
         now = block.timestamp;
     });
 
-    // Create goal helper with sensible defaults
+    // Helper for creatin goal with sensible defaults
     const createGoal = async (options = {}) => {
         const goal = {
             user: owner.address,
@@ -49,10 +51,10 @@ describe("HabitTracker", () => {
             name: "reading",
             unit: "pages",
             deadline: now + 1000,
-            stake: BigNumber.from(100),
+            bounty: BigNumber.from(100),
             ...options,
         };
-        return tracker.createGoal(goal.user, goal.name, goal.category, goal.progress, goal.target, goal.unit, goal.deadline, { value: goal.stake });
+        return tracker.createGoal(goal.user, goal.name, goal.category, goal.progress, goal.target, goal.unit, goal.deadline, { value: goal.bounty });
     };
 
     const increaseTime = async (amount: number) => {
@@ -71,7 +73,7 @@ describe("HabitTracker", () => {
                 name: "reading",
                 unit: "pages",
                 deadline: now + 1000,
-                stake: BigNumber.from(100),
+                bounty: BigNumber.from(100),
                 status: Status.ONGOING,
             };
 
@@ -84,19 +86,19 @@ describe("HabitTracker", () => {
             expect(goal.target).to.equal(options.target);
             expect(goal.unit).to.equal(options.unit);
             expect(goal.deadline).to.equal(options.deadline);
-            expect(goal.stake).to.equal(options.stake);
+            expect(goal.bounty).to.equal(options.bounty);
             expect(goal.status).to.equal(options.status);
         });
 
-        it("transfers funds on creation according to stake parameter", async () => {
-            const stake = BigNumber.from(10000000000000);
-            await expect(await createGoal({ stake })).to.changeEtherBalance(owner, -stake);
+        it("transfers funds on creation according to bounty parameter", async () => {
+            const bounty = BigNumber.from(10000000000000);
+            await expect(await createGoal({ bounty })).to.changeEtherBalance(owner, -bounty);
             const goal = await tracker.getGoal(owner.address, "reading");
-            expect(goal.stake).to.equal(stake);
+            expect(goal.bounty).to.equal(bounty);
         });
 
         it("reverts if value is zero", async () => {
-            await expect(createGoal({ stake: BigNumber.from(0) })).to.be.revertedWith("The goal stake cannot be empty");
+            await expect(createGoal({ bounty: BigNumber.from(0) })).to.be.revertedWith("The goal bounty cannot be empty");
         });
 
         it("can create a goal for other user", async () => {
@@ -121,26 +123,19 @@ describe("HabitTracker", () => {
             await expect(createGoal({ deadline: 0 })).to.be.revertedWith("past goal cannot be created");
         });
 
+        it("reverts if goal is already completed", async () => {
+            await expect(createGoal({ progress: 12, target: 10, category: Category.MORE })).to.be.revertedWith("Goal is already completed");
+            await expect(createGoal({ progress: 12, target: 10, category: Category.TOTAL_MORE })).to.be.revertedWith("Goal is already completed");
+            await expect(createGoal({ progress: 70, target: 80, category: Category.LESS })).to.be.revertedWith("Goal is already completed");
+            await expect(createGoal({ progress: 70, target: 80, category: Category.TOTAL_LESS })).to.be.revertedWith("Goal is already completed");
+        });
+
         it("emits a started event", async () => {
             await expect(createGoal()).to.emit(tracker, "GoalStarted").withArgs(owner.address, "reading");
         });
     });
 
-    describe("update progress", () => {
-        it("updates the progress by the specified amount", async () => {
-            await createGoal({ name: "reading" });
-            let progress = (await tracker.getGoal(owner.address, "reading")).progress;
-            expect(progress).to.equal(0);
-
-            await tracker.addProgress(owner.address, "reading", 1);
-            progress = (await tracker.getGoal(owner.address, "reading")).progress;
-            expect(progress).to.equal(1);
-
-            await tracker.addProgress(owner.address, "reading", 2);
-            progress = (await tracker.getGoal(owner.address, "reading")).progress;
-            expect(progress).to.equal(3);
-        });
-
+    describe("add progress", () => {
         it("reverts if user adding progress is not the owner", async () => {
             await createGoal({ user: owner.address, name: "reading", unit: "pages" });
             await createGoal({ user: anonymous.address, name: "running", unit: "miles" });
@@ -150,6 +145,34 @@ describe("HabitTracker", () => {
         it("reverts if goal with a name does not exist", async () => {
             await createGoal({ name: "running" });
             await expect(tracker.addProgress(owner.address, "reading", 1)).to.be.revertedWith("does not have a goal with that name");
+        });
+
+        it("updates progress of goals categorized as MORE", async () => {
+            await createGoal({ name: "running", progress: 2, target: 10, category: Category.MORE });
+            await tracker.addProgress(owner.address, "running", 4);
+            const progress = (await tracker.getGoal(owner.address, "running")).progress;
+            expect(progress).to.equal(6);
+        });
+
+        it("updates progress of goals categorized as LESS", async () => {
+            await createGoal({ name: "running", progress: 10, target: 0, category: Category.LESS });
+            await tracker.addProgress(owner.address, "running", 4);
+            const progress = (await tracker.getGoal(owner.address, "running")).progress;
+            expect(progress).to.equal(6);
+        });
+
+        it("updates progress of goals categorized as TOTAL_MORE", async () => {
+            await createGoal({ name: "running", progress: 2, target: 10, category: Category.TOTAL_MORE });
+            await tracker.addProgress(owner.address, "running", 4);
+            const progress = (await tracker.getGoal(owner.address, "running")).progress;
+            expect(progress).to.equal(4);
+        });
+
+        it("updates progress of goals categorized as TOTAL_LESS", async () => {
+            await createGoal({ name: "running", progress: 10, target: 0, category: Category.TOTAL_LESS });
+            await tracker.addProgress(owner.address, "running", 4);
+            const progress = (await tracker.getGoal(owner.address, "running")).progress;
+            expect(progress).to.equal(4);
         });
     });
 
@@ -170,28 +193,40 @@ describe("HabitTracker", () => {
             await expect(tracker.completeGoal(owner.address, "running")).to.be.revertedWith("goal has not been reached yet");
         });
 
-        it("transfers stake back when target has been reached", async () => {
-            const stake = BigNumber.from(10000000000000);
-            await createGoal({ name: "running", progress: 12, target: 10, stake });
-            await expect(await tracker.completeGoal(owner.address, "running")).to.changeEtherBalance(owner, stake);
+        it("transfers bounty back when target has been reached", async () => {
+            const bounty = BigNumber.from(10000000000000);
+            await createGoal({ name: "running", progress: 0, target: 10, bounty });
+            await tracker.addProgress(owner.address, "running", 12);
+            await expect(await tracker.completeGoal(owner.address, "running")).to.changeEtherBalance(owner, bounty);
         });
 
         it("reverts if goal is already marked as complete", async () => {
-            const stake = BigNumber.from(10000000000000);
-            await createGoal({ name: "running", progress: 12, target: 10, stake });
+            const bounty = BigNumber.from(10000000000000);
+            await createGoal({ name: "running", progress: 0, target: 10, bounty });
+            await tracker.addProgress(owner.address, "running", 12);
             await tracker.completeGoal(owner.address, "running");
             await expect(tracker.completeGoal(owner.address, "running")).to.be.revertedWith("Goal must be ongoing");
         });
 
         it("goal status transitions to COMPLETED when target has been reached", async () => {
-            await createGoal({ name: "running", progress: 12, target: 10 });
+            await createGoal({ name: "running", progress: 0, target: 10 });
+            await tracker.addProgress(owner.address, "running", 12);
+            await tracker.completeGoal(owner.address, "running");
+            const goal = await tracker.getGoal(owner.address, "running");
+            expect(goal.status).to.be.equal(Status.COMPLETED);
+        });
+
+        it("completes goals categorized as MORE", async () => {
+            await createGoal({ name: "running", progress: 0, target: 10, category: Category.MORE });
+            await tracker.addProgress(owner.address, "running", 12);
             await tracker.completeGoal(owner.address, "running");
             const goal = await tracker.getGoal(owner.address, "running");
             expect(goal.status).to.be.equal(Status.COMPLETED);
         });
 
         it("emits a completed event", async () => {
-            await createGoal({ name: "running", progress: 12, target: 10 });
+            await createGoal({ name: "running", progress: 0, target: 10 });
+            await tracker.addProgress(owner.address, "running", 12);
             await expect(tracker.completeGoal(owner.address, "running")).to.emit(tracker, "GoalCompleted").withArgs(owner.address, "running");
         });
     });
@@ -214,11 +249,11 @@ describe("HabitTracker", () => {
             expect(goal.status).to.be.equal(Status.FAILED);
         });
 
-        it("transfers stake to company", async () => {
-            const stake = BigNumber.from(100);
-            await createGoal({ name: "reading", deadline: now + 60, stake });
+        it("transfers bounty to company", async () => {
+            const bounty = BigNumber.from(100);
+            await createGoal({ name: "reading", deadline: now + 60, bounty });
             await increaseTime(61);
-            await expect(await tracker.failGoal(owner.address, "reading")).to.changeEtherBalance(company, stake);
+            await expect(await tracker.failGoal(owner.address, "reading")).to.changeEtherBalance(company, bounty);
         });
 
         it("emits a failed event", async () => {

@@ -1,10 +1,7 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
-// TODO: Add the possibility to have negative goals (smoke less)
-// TODO: Add the possibility to have boolean goals. This makes sense if frequency feature is implemented
-// TODO: Maybe adding a fee is a good idea
-// TODO: Check how to invest the contract money to generate interests for the users
+// TODO: Make tracker viable via fees or investments
 contract HabitTracker {
     enum Status {
         ONGOING,
@@ -15,7 +12,9 @@ contract HabitTracker {
 
     enum Category {
         MORE,
-        LESS
+        LESS,
+        TOTAL_MORE,
+        TOTAL_LESS
     }
 
     event GoalCompleted(address indexed _from, string indexed _name);
@@ -23,6 +22,7 @@ contract HabitTracker {
     event GoalFailed(address indexed _from, string indexed _name);
     event GoalStarted(address indexed _from, string indexed _name);
 
+    // TODO: Add a description
     struct Goal {
         string name;
         Category category;
@@ -30,12 +30,17 @@ contract HabitTracker {
         uint256 target;
         string unit;
         uint256 deadline;
-        uint256 stake;
+        uint256 bounty;
         Status status;
     }
 
     mapping(address => mapping(string => Goal)) public goals;
     address payable public company;
+
+    // TODO: Keep track of goal names for list display
+    // TODO: Add mapping(string => address) for url display
+    // TODO: Add a way to track statistics such as total amount staked, goals achieved, goals failed etc
+    // TODO: Also, by keeping track of the amount staked the contract could periodically transfer it to the company
 
     constructor(address payable _company) {
         company = _company;
@@ -49,45 +54,53 @@ contract HabitTracker {
         uint256 _target,
         string memory _unit,
         uint256 _deadline
-    ) public payable onlyNewGoal(_user, _name) onlyValidName(_name) onlyMinimumStake(msg.value) onlyFutureGoal(_deadline) {
+    ) public payable {
+        require(bytes(_name).length != 0, "Name cannot be empty");
+        require(msg.value > 0, "The goal bounty cannot be empty");
+        require(goals[_user][_name].bounty == 0, "User already has a goal with that name");
+        require(_deadline > block.timestamp, "A past goal cannot be created");
+        if (_category == Category.MORE || _category == Category.TOTAL_MORE) {
+            require(_progress < _target, "Goal is already completed");
+        } else {
+            require(_progress > _target, "Goal is already completed");
+        }
         goals[_user][_name] = Goal(_name, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING);
         emit GoalStarted(_user, _name);
     }
 
-    // TODO: Consider that when integrations exists, maybe we want to block the user from upgrading their own goal manually
+    // TODO: When integrations exists, other "users" should be able to add progress
     function addProgress(
         address _user,
         string memory _name,
         uint256 _value
     ) public onlyOwner(_user) onlyExistingGoal(_user, _name) {
-        goals[_user][_name].progress += _value;
+        Category _category = goals[_user][_name].category;
+        if (_category == Category.MORE) {
+            goals[_user][_name].progress += _value;
+        } else if (_category == Category.LESS) {
+            goals[_user][_name].progress -= _value;
+        } else {
+            goals[_user][_name].progress = _value;
+        }
     }
 
-    function completeGoal(address payable _user, string memory _name)
-        public
-        onlyOwner(_user)
-        onlyExistingGoal(_user, _name)
-        onlyOngoingGoal(_user, _name)
-        onlyCompletedGoal(_user, _name)
-    {
-        _user.transfer(goals[_user][_name].stake);
+    function completeGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) onlyOngoingGoal(_user, _name) {
+        require(isGoalCompleted(_user, _name), "The goal has not been reached yet");
+        _user.transfer(goals[_user][_name].bounty);
         goals[_user][_name].status = Status.COMPLETED;
         emit GoalCompleted(_user, _name);
     }
 
-    function failGoal(address payable _user, string memory _name)
-        public
-        onlyExistingGoal(_user, _name)
-        onlyOngoingGoal(_user, _name)
-        onlyFailedGoal(_user, _name)
-    {
+    function failGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) onlyOngoingGoal(_user, _name) {
+        require(!isGoalCompleted(_user, _name) && isGoalOver(_user, _name), "The goal is still ongoing");
         goals[_user][_name].status = Status.FAILED;
-        company.transfer(goals[_user][_name].stake);
+        company.transfer(goals[_user][_name].bounty);
         emit GoalFailed(_user, _name);
     }
 
+    // TODO: When compound is integrated, a minimum length should be added to avoid contract gas fees injure
     function cancelGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) onlyOngoingGoal(_user, _name) {
-        _user.transfer(goals[_user][_name].stake);
+        _user.transfer(goals[_user][_name].bounty);
         goals[_user][_name].status = Status.CANCELLED;
         emit GoalCancelled(_user, _name);
     }
@@ -100,17 +113,17 @@ contract HabitTracker {
         return block.timestamp > goals[_user][_name].deadline;
     }
 
+    // TODO: Maybe this function can become pure
     function isGoalCompleted(address _user, string memory _name) internal view returns (bool) {
-        return goals[_user][_name].progress >= goals[_user][_name].target;
+        Goal memory _goal = goals[_user][_name];
+        if (_goal.category == Category.MORE || _goal.category == Category.TOTAL_MORE) {
+            return _goal.progress >= _goal.target;
+        }
+        return _goal.progress <= _goal.target;
     }
 
     modifier onlyOwner(address _user) {
         require(msg.sender == _user, "This function can only be called by the owner");
-        _;
-    }
-
-    modifier onlyCompletedGoal(address _user, string memory _name) {
-        require(isGoalCompleted(_user, _name), "The goal has not been reached yet");
         _;
     }
 
@@ -120,32 +133,7 @@ contract HabitTracker {
     }
 
     modifier onlyExistingGoal(address _user, string memory _name) {
-        require(goals[_user][_name].stake != 0, "User does not have a goal with that name");
-        _;
-    }
-
-    modifier onlyNewGoal(address _user, string memory _name) {
-        require(goals[_user][_name].stake == 0, "User already has a goal with that name");
-        _;
-    }
-
-    modifier onlyMinimumStake(uint256 amount) {
-        require(amount > 0, "The goal stake cannot be empty");
-        _;
-    }
-
-    modifier onlyFutureGoal(uint256 _deadline) {
-        require(_deadline > block.timestamp, "A past goal cannot be created");
-        _;
-    }
-
-    modifier onlyValidName(string memory _name) {
-        require(bytes(_name).length != 0, "Name cannot be empty");
-        _;
-    }
-
-    modifier onlyFailedGoal(address _user, string memory _name) {
-        require(!isGoalCompleted(_user, _name) && isGoalOver(_user, _name), "The goal is still ongoing");
+        require(goals[_user][_name].bounty != 0, "User does not have a goal with that name");
         _;
     }
 }

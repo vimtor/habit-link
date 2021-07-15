@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "./HabitTracker.sol";
 
 // TODO: Add discoverability
+// TODO: This probably should be an interface
 contract HabitSource {
     HabitTracker tracker;
 
