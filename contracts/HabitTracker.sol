@@ -85,16 +85,18 @@ contract HabitTracker {
     }
 
     function completeGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) onlyOngoingGoal(_user, _name) {
-        require(isGoalCompleted(_user, _name), "The goal has not been reached yet");
-        _user.transfer(goals[_user][_name].bounty);
+        Goal memory _goal = goals[_user][_name];
+        require(isGoalCompleted(_goal), "The goal has not been reached yet");
+        _user.transfer(_goal.bounty);
         goals[_user][_name].status = Status.COMPLETED;
         emit GoalCompleted(_user, _name);
     }
 
     function failGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) onlyOngoingGoal(_user, _name) {
-        require(!isGoalCompleted(_user, _name) && isGoalOver(_user, _name), "The goal is still ongoing");
+        Goal memory _goal = goals[_user][_name];
+        require(isGoalOver(_goal.deadline) && !isGoalCompleted(_goal), "The goal is still ongoing");
+        company.transfer(_goal.bounty);
         goals[_user][_name].status = Status.FAILED;
-        company.transfer(goals[_user][_name].bounty);
         emit GoalFailed(_user, _name);
     }
 
@@ -109,13 +111,11 @@ contract HabitTracker {
         return goals[_user][_name];
     }
 
-    function isGoalOver(address _user, string memory _name) internal view returns (bool) {
-        return block.timestamp > goals[_user][_name].deadline;
+    function isGoalOver(uint256 _deadline) internal view returns (bool) {
+        return block.timestamp > _deadline;
     }
 
-    // TODO: Maybe this function can become pure
-    function isGoalCompleted(address _user, string memory _name) internal view returns (bool) {
-        Goal memory _goal = goals[_user][_name];
+    function isGoalCompleted(Goal memory _goal) internal pure returns (bool) {
         if (_goal.category == Category.MORE || _goal.category == Category.TOTAL_MORE) {
             return _goal.progress >= _goal.target;
         }
