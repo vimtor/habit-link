@@ -61,11 +61,7 @@ contract HabitTracker {
         require(msg.value > 0, "The goal bounty cannot be empty");
         require(goals[_user][_name].bounty == 0, "User already has a goal with that name");
         require(_deadline > block.timestamp, "A past goal cannot be created");
-        if (_category == Category.MORE || _category == Category.TOTAL_MORE) {
-            require(_progress < _target, "Goal is already completed");
-        } else {
-            require(_progress > _target, "Goal is already completed");
-        }
+        require(!isGoalCompleted(_category, _progress, _target), "Goal is already completed");
         goals[_user][_name] = Goal(_name, _description, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING, block.timestamp);
         emit GoalStarted(_user, _name);
     }
@@ -88,7 +84,7 @@ contract HabitTracker {
 
     function completeGoal(address payable _user, string memory _name) public onlyOwner(_user) onlyExistingGoal(_user, _name) onlyOngoingGoal(_user, _name) {
         Goal memory _goal = goals[_user][_name];
-        require(isGoalCompleted(_goal), "The goal has not been reached yet");
+        require(isGoalCompleted(_goal.category, _goal.progress, _goal.target), "The goal has not been reached yet");
         _user.transfer(_goal.bounty);
         goals[_user][_name].status = Status.COMPLETED;
         emit GoalCompleted(_user, _name);
@@ -96,7 +92,7 @@ contract HabitTracker {
 
     function failGoal(address payable _user, string memory _name) public onlyExistingGoal(_user, _name) onlyOngoingGoal(_user, _name) {
         Goal memory _goal = goals[_user][_name];
-        require(isGoalOver(_goal.deadline) && !isGoalCompleted(_goal), "The goal is still ongoing");
+        require(isGoalOver(_goal.deadline) && !isGoalCompleted(_goal.category, _goal.progress, _goal.target), "The goal is still ongoing");
         company.transfer(_goal.bounty);
         goals[_user][_name].status = Status.FAILED;
         emit GoalFailed(_user, _name);
@@ -117,11 +113,15 @@ contract HabitTracker {
         return block.timestamp > _deadline;
     }
 
-    function isGoalCompleted(Goal memory _goal) internal pure returns (bool) {
-        if (_goal.category == Category.MORE || _goal.category == Category.TOTAL_MORE) {
-            return _goal.progress >= _goal.target;
+    function isGoalCompleted(
+        Category _category,
+        uint256 _progress,
+        uint256 _target
+    ) internal pure returns (bool) {
+        if (_category == Category.MORE || _category == Category.TOTAL_MORE) {
+            return _progress >= _target;
         }
-        return _goal.progress <= _goal.target;
+        return _progress <= _target;
     }
 
     modifier onlyOwner(address _user) {
