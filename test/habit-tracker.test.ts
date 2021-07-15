@@ -49,12 +49,15 @@ describe("HabitTracker", () => {
             progress: 0,
             target: 100,
             name: "reading",
+            description: "read one book a week",
             unit: "pages",
             deadline: now + 1000,
             bounty: BigNumber.from(100),
             ...options,
         };
-        return tracker.createGoal(goal.user, goal.name, goal.category, goal.progress, goal.target, goal.unit, goal.deadline, { value: goal.bounty });
+        return tracker.createGoal(goal.user, goal.name, goal.description, goal.category, goal.progress, goal.target, goal.unit, goal.deadline, {
+            value: goal.bounty,
+        });
     };
 
     const increaseTime = async (amount: number) => {
@@ -71,6 +74,7 @@ describe("HabitTracker", () => {
                 progress: 0,
                 target: 100,
                 name: "reading",
+                description: "read one book a week",
                 unit: "pages",
                 deadline: now + 1000,
                 bounty: BigNumber.from(100),
@@ -81,6 +85,7 @@ describe("HabitTracker", () => {
             const goal = await tracker.getGoal(owner.address, "reading");
 
             expect(goal.name).to.equal(options.name);
+            expect(goal.description).to.equal(options.description);
             expect(goal.category).to.equal(options.category);
             expect(goal.progress).to.equal(options.progress);
             expect(goal.target).to.equal(options.target);

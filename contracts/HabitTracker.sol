@@ -22,9 +22,9 @@ contract HabitTracker {
     event GoalFailed(address indexed _from, string indexed _name);
     event GoalStarted(address indexed _from, string indexed _name);
 
-    // TODO: Add a description
     struct Goal {
         string name;
+        string description;
         Category category;
         uint256 progress;
         uint256 target;
@@ -49,6 +49,7 @@ contract HabitTracker {
     function createGoal(
         address _user,
         string memory _name,
+        string memory _description,
         Category _category,
         uint256 _progress,
         uint256 _target,
@@ -64,7 +65,7 @@ contract HabitTracker {
         } else {
             require(_progress > _target, "Goal is already completed");
         }
-        goals[_user][_name] = Goal(_name, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING);
+        goals[_user][_name] = Goal(_name, _description, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING);
         emit GoalStarted(_user, _name);
     }
 
