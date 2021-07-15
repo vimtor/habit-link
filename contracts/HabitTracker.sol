@@ -32,6 +32,7 @@ contract HabitTracker {
         uint256 deadline;
         uint256 bounty;
         Status status;
+        uint256 createdOn;
     }
 
     mapping(address => mapping(string => Goal)) public goals;
@@ -65,7 +66,7 @@ contract HabitTracker {
         } else {
             require(_progress > _target, "Goal is already completed");
         }
-        goals[_user][_name] = Goal(_name, _description, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING);
+        goals[_user][_name] = Goal(_name, _description, _category, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING, block.timestamp);
         emit GoalStarted(_user, _name);
     }
 

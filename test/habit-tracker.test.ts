@@ -93,6 +93,7 @@ describe("HabitTracker", () => {
             expect(goal.deadline).to.equal(options.deadline);
             expect(goal.bounty).to.equal(options.bounty);
             expect(goal.status).to.equal(options.status);
+            expect(goal.createdOn).to.be.closeTo(BigNumber.from(now), 10);
         });
 
         it("transfers funds on creation according to bounty parameter", async () => {
