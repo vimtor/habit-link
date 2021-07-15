@@ -112,8 +112,8 @@ describe("HabitTracker", () => {
             await expect(createGoal({ name: "" })).to.be.revertedWith("Goal name cannot be empty");
         });
 
-        it("can create a goal for other user", async () => {
-            await expect(createGoal({ user: anonymous.address })).not.to.be.reverted;
+        it("reverts if user creates a goal for other user", async () => {
+            await expect(createGoal({ user: anonymous.address })).to.be.revertedWith("This function can only be called by the owner");
         });
 
         it("can create multiple goals for the same user", async () => {
@@ -147,11 +147,11 @@ describe("HabitTracker", () => {
     });
 
     describe("add progress", () => {
-        it("reverts if user adding progress is not the owner", async () => {
-            await createGoal({ user: owner.address, name: "reading", unit: "pages" });
-            await createGoal({ user: anonymous.address, name: "running", unit: "miles" });
-            await expect(tracker.addProgress(anonymous.address, "running", 1)).to.be.revertedWith("function can only be called by the owner");
-        });
+        // it("reverts if user adding progress is not the owner", async () => {
+        //     await createGoal({ user: owner.address, name: "reading", unit: "pages" });
+        //     await createGoal({ user: anonymous.address, name: "running", unit: "miles" });
+        //     await expect(tracker.addProgress(anonymous.address, "running", 1)).to.be.revertedWith("function can only be called by the owner");
+        // });
 
         it("reverts if goal with a name does not exist", async () => {
             await createGoal({ name: "running" });
@@ -200,11 +200,11 @@ describe("HabitTracker", () => {
             await expect(tracker.completeGoal(owner.address, "reading")).to.be.revertedWith("does not have a goal with that name");
         });
 
-        it("reverts if user adding progress is not the owner", async () => {
-            await createGoal({ user: owner.address, name: "reading", unit: "pages" });
-            await createGoal({ user: anonymous.address, name: "running", unit: "miles" });
-            await expect(tracker.completeGoal(anonymous.address, "reading")).to.be.revertedWith("function can only be called by the owner");
-        });
+        // it("reverts if user adding progress is not the owner", async () => {
+        //     await createGoal({ user: owner.address, name: "reading", unit: "pages" });
+        //     await createGoal({ user: anonymous.address, name: "running", unit: "miles" });
+        //     await expect(tracker.completeGoal(anonymous.address, "reading")).to.be.revertedWith("function can only be called by the owner");
+        // });
 
         it("reverts if goal target has not been reached", async () => {
             await createGoal({ name: "running", progress: 0, target: 10 });

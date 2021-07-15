@@ -14,7 +14,19 @@ task("accounts", "Prints the list of accounts", async (args, hre) => {
     }
 });
 
+task("types", async (args, hre) => {
+    hre.config.typechain.outDir = "./frontend/utils";
+    await hre.run("compile");
+    await hre.run("react");
+
+    hre.config.typechain.outDir = "./typechain";
+    await hre.run("compile");
+});
+
 const config: HardhatUserConfig = {
+    paths: {
+        react: "./frontend/hooks",
+    },
     react: {
         providerPriority: ["web3modal", "hardhat"],
     },
@@ -27,7 +39,7 @@ const config: HardhatUserConfig = {
         },
     },
     typechain: {
-        outDir: "./typechain",
+        outDir: "./frontend/utils",
     },
     solidity: "0.8.4",
 };

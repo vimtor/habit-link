@@ -57,7 +57,7 @@ contract HabitTracker {
         uint256 _target,
         string memory _unit,
         uint256 _deadline
-    ) public payable {
+    ) public payable onlyOwner(_user) {
         require(bytes(_name).length != 0, "Goal name cannot be empty");
         require(msg.value > 0, "The goal bounty cannot be empty");
         require(goals[_user][_name].bounty == 0, "User already has a goal with that name");
@@ -107,11 +107,11 @@ contract HabitTracker {
         emit GoalCancelled(_user, _name);
     }
 
-    function getGoal(address payable _user, string memory _name) public view onlyExistingGoal(_user, _name) returns (Goal memory) {
+    function getGoal(address _user, string memory _name) public view onlyExistingGoal(_user, _name) returns (Goal memory) {
         return goals[_user][_name];
     }
 
-    function getGoals(address payable _user) public view returns (Goal[] memory) {
+    function getGoals(address _user) public view returns (Goal[] memory) {
         uint256 _totalGoals = goalNames[_user].length;
         Goal[] memory _goals = new Goal[](_totalGoals);
         for (uint256 i = 0; i < _totalGoals; i++) {
