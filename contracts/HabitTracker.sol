@@ -37,10 +37,10 @@ contract HabitTracker {
     }
 
     mapping(address => mapping(string => Goal)) public goals;
+    mapping(address => string[]) goalNames;
     address payable public company;
 
-    // TODO: Keep track of goal names for list display
-    // TODO: Add mapping(string => address) for url display
+    // TODO: Add mapping(string => address) for user url display
     // TODO: Add a way to track statistics such as total amount staked, goals achieved, goals failed etc
     // TODO: Also, by keeping track of the total amount staked, the contract could periodically transfer it to the company
 
@@ -64,6 +64,7 @@ contract HabitTracker {
         require(_deadline > block.timestamp, "A past goal cannot be created");
         require(!isGoalCompleted(_category, _progress, _target), "Goal is already completed");
         goals[_user][_name] = Goal(_name, _description, _category, _progress, _progress, _target, _unit, _deadline, msg.value, Status.ONGOING, block.timestamp);
+        goalNames[_user].push(_name);
         emit GoalStarted(_user, _name);
     }
 
@@ -108,6 +109,15 @@ contract HabitTracker {
 
     function getGoal(address payable _user, string memory _name) public view onlyExistingGoal(_user, _name) returns (Goal memory) {
         return goals[_user][_name];
+    }
+
+    function getGoals(address payable _user) public view returns (Goal[] memory) {
+        uint256 _totalGoals = goalNames[_user].length;
+        Goal[] memory _goals = new Goal[](_totalGoals);
+        for (uint256 i = 0; i < _totalGoals; i++) {
+            _goals[i] = goals[_user][goalNames[_user][i]];
+        }
+        return _goals;
     }
 
     function isGoalOver(uint256 _deadline) internal view returns (bool) {

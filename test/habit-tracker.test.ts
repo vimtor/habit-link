@@ -119,10 +119,10 @@ describe("HabitTracker", () => {
         it("can create multiple goals for the same user", async () => {
             await createGoal({ name: "reading", unit: "pages" });
             await createGoal({ name: "running", unit: "miles" });
-            const readingGoal = await tracker.getGoal(owner.address, "reading");
-            const runningGoal = await tracker.getGoal(owner.address, "running");
-            expect(readingGoal.progress).to.equal(0);
-            expect(runningGoal.progress).to.equal(0);
+            const goals = await tracker.getGoals(owner.address);
+            expect(goals).to.have.length(2);
+            expect(goals[0].name).to.equal("reading");
+            expect(goals[1].name).to.equal("running");
         });
 
         it("reverts when creating two goals with the same name", async () => {
