@@ -1,12 +1,12 @@
-import "tailwindcss/tailwind.css";
+import "../styles/index.css";
 import type { AppProps } from "next/app";
-import { Symfoni } from "../hooks/SymfoniContext";
+import WalletProvider from "../components/wallet-provider";
 
 function MyApp({ Component, pageProps }: AppProps) {
     return (
-        <Symfoni autoInit={true}>
+        <WalletProvider>
             <Component {...pageProps} />
-        </Symfoni>
+        </WalletProvider>
     );
 }
 export default MyApp;

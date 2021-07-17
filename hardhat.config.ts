@@ -1,10 +1,6 @@
-import "@nomiclabs/hardhat-waffle";
+import "@typechain/hardhat";
 import "@nomiclabs/hardhat-ethers";
-import "hardhat-deploy-ethers";
-import "hardhat-deploy";
-import "@symfoni/hardhat-react";
-import "hardhat-typechain";
-import "@typechain/ethers-v5";
+import "@nomiclabs/hardhat-waffle";
 import { task, HardhatUserConfig } from "hardhat/config";
 
 task("accounts", "Prints the list of accounts", async (args, hre) => {
@@ -14,32 +10,17 @@ task("accounts", "Prints the list of accounts", async (args, hre) => {
     }
 });
 
-task("types", async (args, hre) => {
-    hre.config.typechain.outDir = "./frontend/utils";
-    await hre.run("compile");
-    await hre.run("react");
-
-    hre.config.typechain.outDir = "./typechain";
-    await hre.run("compile");
-});
-
 const config: HardhatUserConfig = {
-    paths: {
-        react: "./frontend/hooks",
-    },
-    react: {
-        providerPriority: ["web3modal", "hardhat"],
-    },
     networks: {
         hardhat: {
-            inject: false,
             accounts: {
                 mnemonic: "test test test test test test test test test test test junk",
             },
         },
     },
     typechain: {
-        outDir: "./frontend/utils",
+        outDir: "./frontend/types/ethers",
+        target: "ethers-v5",
     },
     solidity: "0.8.4",
 };

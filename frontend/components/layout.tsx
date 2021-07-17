@@ -15,7 +15,6 @@ function Layout({ children, title }: LayoutProps) {
                 <link rel="icon" href="/favicon.ico" />
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800" rel="stylesheet" />
             </Head>
-            <Navbar />
             <main>{children}</main>
         </div>
     );

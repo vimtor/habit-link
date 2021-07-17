@@ -1,25 +1,13 @@
 import { ethers, network } from "hardhat";
 import { expect, use } from "chai";
 import { solidity } from "ethereum-waffle";
-import { HabitTracker } from "../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BigNumber } from "ethers";
+import { HabitTracker } from "../frontend/types/ethers";
+import { Category } from "../frontend/types/category";
+import { Status } from "../frontend/types/goal";
 
 use(solidity);
-
-enum Status {
-    ONGOING,
-    COMPLETED,
-    CANCELLED,
-    FAILED,
-}
-
-enum Category {
-    MORE,
-    LESS,
-    TOTAL_MORE,
-    TOTAL_LESS,
-}
 
 describe("HabitTracker", () => {
     let tracker: HabitTracker;
