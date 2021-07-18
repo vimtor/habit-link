@@ -121,7 +121,7 @@ const CreateGoalModal = ({ open, onClose, onSave }: CreateGoalModalProps) => {
             category: data.category,
             progress: BigNumber.from(data.progress),
             target: BigNumber.from(data.target),
-            bounty: parseEther(data.bounty),
+            bounty: parseEther(data.bounty.toString()),
             deadline: BigNumber.from(dayjs(data.deadline, "YYYY-MM-DD").unix()),
         });
         onClose();
@@ -247,7 +247,14 @@ const CreateGoalModal = ({ open, onClose, onSave }: CreateGoalModalProps) => {
                         <FormGroup>
                             <Label htmlFor="bounty">Bounty</Label>
                             <div className="mt-1 relative rounded-md shadow-sm">
-                                <Input {...register("bounty")} placeholder="0.00000" step="0.00001" type="number" id="bounty" className="pr-16" />
+                                <Input
+                                    {...register("bounty", { valueAsNumber: false })}
+                                    placeholder="0.00000"
+                                    step="0.00001"
+                                    type="number"
+                                    id="bounty"
+                                    className="pr-16"
+                                />
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     {bounty ? (
                                         <span className="text-gray-400 italic sm:text-sm" id="price-currency">
