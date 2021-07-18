@@ -24,12 +24,17 @@ const WalletProvider = ({ children }: { children: ReactNode }) => {
         // @ts-ignore
         const provider = new ethers.providers.Web3Provider(window.ethereum, "any");
 
-        provider.listAccounts().then((accounts) => {
-            if (accounts.length > 0) {
-                setConnected(true);
-                setAddress(accounts[0]);
-            }
-        });
+        provider
+            .listAccounts()
+            .then((accounts) => {
+                if (accounts.length > 0) {
+                    setConnected(true);
+                    setAddress(accounts[0]);
+                }
+            })
+            .catch(() => {
+                console.log("User not connected");
+            });
 
         // @ts-ignore
         window.ethereum.on("accountsChanged", () => {
@@ -51,7 +56,7 @@ const WalletProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const connect = async () => {
-        const accounts = await provider?.listAccounts();
+        const accounts = await provider?.send("eth_requestAccounts", []);
         if (accounts) {
             setConnected(true);
             setAddress(accounts[0]);

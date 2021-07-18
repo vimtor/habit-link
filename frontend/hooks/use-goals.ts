@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import useTracker from "./use-tracker";
 import { CreateGoal, Goal } from "../types/goal";
+import useWallet from "./use-wallet";
 
 function useGoals(address: string) {
+    const { connected } = useWallet();
     const tracker = useTracker();
     const [goals, setGoals] = useState<Goal[]>([]);
 
     useEffect(() => {
-        if (!address) {
+        if (!address || !connected) {
             return;
         }
 
@@ -32,7 +34,7 @@ function useGoals(address: string) {
             .catch((error) => {
                 console.error(error);
             });
-    }, [address]);
+    }, [address, connected]);
 
     const createGoal = async (info: CreateGoal) => {
         const tx = await tracker!.createGoal(address, info.name, info.description, info.category, info.progress, info.target, info.unit, info.deadline, {
